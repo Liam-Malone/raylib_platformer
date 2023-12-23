@@ -49,7 +49,9 @@ const EnvItem = struct {
 
 const Player = struct {
     pos: rl.Vector2 = .{ .x = 0, .y = 0 },
-    speed: f32 = 0,
+    dy: f32 = 0,
+    dx: f32 = 0,
+    size: rl.Vector2 = .{ .x = 48, .y = 62 },
     can_jump: bool = false,
 };
 
@@ -113,7 +115,7 @@ pub fn main() anyerror!void {
 
     var env = [_]EnvItem{
         EnvItem{
-            .rect = rl.Rectangle{
+            .rect = .{
                 .x = 0,
                 .y = 0,
                 .width = 1000,
@@ -123,7 +125,7 @@ pub fn main() anyerror!void {
             .blocking = false,
         },
         EnvItem{
-            .rect = rl.Rectangle{
+            .rect = .{
                 .x = 0,
                 .y = 400,
                 .width = 1000,
@@ -133,7 +135,7 @@ pub fn main() anyerror!void {
             .blocking = true,
         },
         EnvItem{
-            .rect = rl.Rectangle{
+            .rect = .{
                 .x = 300,
                 .y = 200,
                 .width = 400,
@@ -143,12 +145,23 @@ pub fn main() anyerror!void {
             .blocking = true,
         },
         EnvItem{
-            .rect = rl.Rectangle{
+            .rect = .{
                 .x = 250,
                 .y = 300,
                 .width = 100,
                 .height = 10,
             },
+            .col = rl.GRAY,
+            .blocking = true,
+        },
+        EnvItem{
+            .rect = .{
+                .x = 400,
+                .y = 300,
+                .width = 10,
+                .height = 80,
+            },
+            .id = .Wall,
             .col = rl.GRAY,
             .blocking = true,
         },
@@ -217,16 +230,39 @@ pub fn main() anyerror!void {
         rl.BeginMode2D(camera);
         for (env) |item| {
             rl.DrawRectangleRec(item.rect, item.col);
-            rl.DrawTextureRec(tex, .{ .x = 0, .y = 0, .width = 32, .height = 32 }, .{ .x = item.rect.x, .y = item.rect.y }, rl.WHITE);
+            //rl.DrawTextureRec(
+            //    tex,
+            //    .{ .x = 0, .y = 0, .width = 32, .height = 32 },
+            //    .{ .x = item.rect.x, .y = item.rect.y },
+            //    rl.WHITE,
+            //);
         }
         const player_rect = rl.Rectangle{
-            .x = player.pos.x - 20,
-            .y = player.pos.y - 40,
-            .width = 40,
-            .height = 40,
+            .x = player.pos.x,
+            .y = player.pos.y,
+            .width = player.size.x,
+            .height = player.size.y,
         };
 
-        rl.DrawRectangleRec(player_rect, rl.RED);
+        rl.DrawTexturePro(
+            tex,
+            .{ .x = 0, .y = 64, .width = 24, .height = 31 },
+            player_rect,
+            .{ .x = 0, .y = 64 },
+            0,
+            rl.WHITE,
+        );
+
+        if (mode == .Edit) rl.DrawRectangleLinesEx(
+            .{
+                .x = player_rect.x,
+                .y = player_rect.y - player_rect.height,
+                .width = player.size.x,
+                .height = player.size.y,
+            },
+            2.5,
+            rl.GREEN,
+        );
 
         rl.EndMode2D();
         if (mode == .Edit) {
@@ -288,11 +324,11 @@ fn draw_player_debug_info(alloc: std.mem.Allocator, player: *Player, screenWidth
 
     var str = std.fmt.allocPrint(
         alloc,
-        "PLAYER\n\npos: ({d:.2}, {d:.2})\n\nv-speed: {d:.2}\n\ncan_jump: {any}\n\n",
+        "PLAYER  INFO\n\npos: ({d:.2}, {d:.2})\n\nv-dy: {d:.2}\n\ncan_jump: {any}\n\n",
         .{
             player.pos.x,
             player.pos.y,
-            player.speed,
+            player.dy,
             player.can_jump,
         },
     ) catch "Err";
@@ -304,33 +340,59 @@ fn draw_player_debug_info(alloc: std.mem.Allocator, player: *Player, screenWidth
 }
 
 fn update_player(player: *Player, env: []EnvItem, delta_time: f32) void {
-    if (rl.IsKeyDown(rl.KEY_A)) player.pos.x -= PLAYER_MOVE_SPEED * delta_time;
-    if (rl.IsKeyDown(rl.KEY_D)) player.pos.x += PLAYER_MOVE_SPEED * delta_time;
+    if (rl.IsKeyDown(rl.KEY_A)) player.dx = PLAYER_MOVE_SPEED * -1;
+    if (rl.IsKeyDown(rl.KEY_D)) player.dx = PLAYER_MOVE_SPEED;
     if (rl.IsKeyDown(rl.KEY_SPACE) and player.can_jump) {
-        player.speed = -PLAYER_JUMP_SPEED;
+        player.dy = -PLAYER_JUMP_SPEED;
         player.can_jump = false;
     }
+    if (rl.IsKeyReleased(rl.KEY_A) and player.dx < 0) {
+        player.dx = 0;
+    }
+    if (rl.IsKeyReleased(rl.KEY_D) and player.dx > 0) {
+        player.dx = 0;
+    }
 
-    var hit_obstacle = false;
+    var hit_vertical_obstacle = false;
+    var hit_horizontal_obstacle = false;
     for (env) |item| {
-        if (item.blocking and
-            item.rect.x <= player.pos.x and
-            item.rect.x + item.rect.width >= player.pos.x and
-            item.rect.y >= player.pos.y and
-            item.rect.y <= player.pos.y + player.speed * delta_time)
-        {
-            hit_obstacle = true;
-            player.speed = 0;
-            player.pos.y = item.rect.y;
+        switch (item.id) {
+            .Platform => {
+                if (item.blocking and
+                    item.rect.x <= player.pos.x + player.size.x and
+                    item.rect.x + item.rect.width >= player.pos.x and
+                    item.rect.y >= player.pos.y and
+                    item.rect.y <= player.pos.y + player.dy * delta_time)
+                {
+                    hit_vertical_obstacle = true;
+                    player.dy = 0;
+                    player.pos.y = item.rect.y;
+                }
+            },
+            .Wall => {
+                if (item.blocking and
+                    item.rect.x <= player.pos.x + player.size.x + player.dx * delta_time and
+                    item.rect.x + item.rect.width >= player.pos.x + player.dx * delta_time and
+                    item.rect.y + item.rect.height >= player.pos.y - player.size.y and
+                    item.rect.y <= player.pos.y + player.dy * delta_time)
+                {
+                    hit_horizontal_obstacle = true;
+                    std.debug.print("player hit wall\n", .{});
+                    player.dx = 0;
+                }
+            },
         }
     }
 
-    if (!hit_obstacle) {
-        player.pos.y += player.speed * delta_time;
-        player.speed += GRAVITY * delta_time;
+    if (!hit_vertical_obstacle) {
+        player.pos.y += player.dy * delta_time;
+        player.dy += GRAVITY * delta_time;
         player.can_jump = false;
     } else {
         player.can_jump = true;
+    }
+    if (!hit_horizontal_obstacle) {
+        player.pos.x += player.dx * delta_time;
     }
 }
 
