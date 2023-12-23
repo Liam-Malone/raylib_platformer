@@ -72,10 +72,12 @@ const UI = struct {
         }
 
         if (rl.CheckCollisionPointRec(mouse, rect)) {
-            if (rl.IsMouseButtonDown()) {
+            if (rl.IsMouseButtonPressed(1)) {
                 ui.active_id = id;
+                std.debug.print("mouse press!!\n", .{});
             } else {}
         }
+        return false;
     }
 };
 // END STRUCTS
@@ -182,7 +184,7 @@ pub fn main() anyerror!void {
                 if (rl.IsKeyPressed(rl.KEY_F5)) mode = .Play;
                 if (selected) |sel| {
                     _ = sel;
-                    if (rl.IsMouseButtonPressed()) {
+                    if (rl.IsMouseButtonPressed(1)) {
                         // place elem of sel
                     }
                 }
@@ -250,7 +252,7 @@ pub fn main() anyerror!void {
     }
 }
 
-fn draw_toolbar(pos: rl.Vector2, w: f32, h: f32, col: rl.Color, tb: *UI, sel: *u8) void {
+fn draw_toolbar(pos: rl.Vector2, w: f32, h: f32, col: rl.Color, tb: *UI, sel: *?u8) void {
     rl.DrawRectangleRec(
         .{
             .x = pos.x,
