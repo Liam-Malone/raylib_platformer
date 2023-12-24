@@ -36,6 +36,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    unit_tests.addIncludePath(.{ .path = "libs/raylib-5.0/src" });
+    unit_tests.linkLibrary(rl);
     const run_unit_tests = b.addRunArtifact(unit_tests);
 
     const test_step = b.step("test", "Run unit tests");

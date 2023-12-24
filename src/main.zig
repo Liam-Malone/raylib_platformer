@@ -33,8 +33,9 @@ const ElemID = enum {
 };
 
 const Mode = enum {
-    Play,
+    Debug,
     Edit,
+    Play,
 };
 // END ENUMS
 
@@ -69,14 +70,15 @@ const UI = struct {
         }
         if (ui.active_id) |a_id| {
             if (a_id == id) {
-                // do action
+                ui.active_id = null;
+                std.debug.print("I'm doing my part!!\n", .{});
+                return true;
             }
         }
 
         if (rl.CheckCollisionPointRec(mouse, rect)) {
-            if (rl.IsMouseButtonPressed(1)) {
+            if (rl.IsMouseButtonPressed(0)) {
                 ui.active_id = id;
-                std.debug.print("mouse press!!\n", .{});
             } else {}
         }
         return false;
@@ -113,17 +115,7 @@ pub fn main() anyerror!void {
 
     var tex: rl.Texture2D = rl.LoadTexture("assets/texmap.png");
 
-    var env = [_]EnvItem{
-        EnvItem{
-            .rect = .{
-                .x = 0,
-                .y = 0,
-                .width = 1000,
-                .height = 500,
-            },
-            .col = rl.LIGHTGRAY,
-            .blocking = false,
-        },
+    var start_env = [_]?EnvItem{
         EnvItem{
             .rect = .{
                 .x = 0,
@@ -156,16 +148,19 @@ pub fn main() anyerror!void {
         },
         EnvItem{
             .rect = .{
-                .x = 400,
-                .y = 300,
+                .x = 800,
+                .y = 100,
                 .width = 10,
-                .height = 80,
+                .height = 200,
             },
             .id = .Wall,
             .col = rl.GRAY,
             .blocking = true,
         },
+        null,
     };
+
+    var env: []?EnvItem = start_env[0..start_env.len];
 
     var camera = rl.Camera2D{
         .zoom = 1,
@@ -177,33 +172,61 @@ pub fn main() anyerror!void {
     var debug_menu = UI{ .id = 1 };
     _ = debug_menu;
 
-    var selected: ?u8 = null;
+    var selected: ?ElemID = null;
 
-    rl.SetTargetFPS(60); // Set game to run at 60 frames-per-second
+    rl.SetTargetFPS(60);
     rl.SetExitKey(rl.KEY_Q);
     //--------------------------------------------------------------------------------------
 
-    // Main game loop
-    while (!rl.WindowShouldClose()) { // Detect window close button or ESC key
+    while (!rl.WindowShouldClose()) {
         // Update
         //----------------------------------------------------------------------------------
         const delta_time: f32 = rl.GetFrameTime();
 
         switch (mode) {
-            .Play => {
+            .Debug => {
                 if (rl.IsKeyPressed(rl.KEY_F5)) mode = .Edit;
+                if (rl.IsKeyPressed(rl.KEY_F3)) mode = .Play;
             },
             .Edit => {
                 if (rl.IsKeyPressed(rl.KEY_F5)) mode = .Play;
+                if (rl.IsKeyPressed(rl.KEY_F3)) mode = .Debug;
                 if (selected) |sel| {
-                    _ = sel;
-                    if (rl.IsMouseButtonPressed(1)) {
-                        // place elem of sel
+                    if (rl.IsMouseButtonPressed(1)) selected = null;
+                    if (rl.IsMouseButtonPressed(0)) {
+                        const pos = rl.GetMousePosition();
+
+                        env = try add_to_env_items(
+                            alloc,
+                            env,
+                            .{
+                                .id = sel,
+                                .pos = pos,
+                                .rect = switch (sel) {
+                                    .Wall => .{
+                                        .x = pos.x - (camera.offset.x - camera.target.x),
+                                        .y = pos.y - (camera.offset.y - camera.target.x),
+                                        .width = 16,
+                                        .height = 128,
+                                    },
+                                    .Platform => .{
+                                        .x = pos.x - (camera.offset.x - camera.target.x),
+                                        .y = pos.y - (camera.offset.y - camera.target.y),
+                                        .width = 128,
+                                        .height = 16,
+                                    },
+                                },
+                            },
+                        );
                     }
                 }
             },
+            .Play => {
+                if (rl.IsKeyPressed(rl.KEY_F5)) mode = .Edit;
+                if (rl.IsKeyPressed(rl.KEY_F3)) mode = .Debug;
+            },
         }
-        update_player(&player, &env, delta_time);
+        update_player(&player, env, delta_time);
 
         camera.zoom += rl.GetMouseWheelMove() * 0.05;
 
@@ -228,14 +251,8 @@ pub fn main() anyerror!void {
         rl.ClearBackground(rl.LIGHTGRAY);
 
         rl.BeginMode2D(camera);
-        for (env) |item| {
-            rl.DrawRectangleRec(item.rect, item.col);
-            //rl.DrawTextureRec(
-            //    tex,
-            //    .{ .x = 0, .y = 0, .width = 32, .height = 32 },
-            //    .{ .x = item.rect.x, .y = item.rect.y },
-            //    rl.WHITE,
-            //);
+        for (env) |env_item| {
+            if (env_item) |item| rl.DrawRectangleRec(item.rect, item.col);
         }
         const player_rect = rl.Rectangle{
             .x = player.pos.x,
@@ -253,7 +270,7 @@ pub fn main() anyerror!void {
             rl.WHITE,
         );
 
-        if (mode == .Edit) rl.DrawRectangleLinesEx(
+        if (mode == .Debug) rl.DrawRectangleLinesEx(
             .{
                 .x = player_rect.x,
                 .y = player_rect.y - player_rect.height,
@@ -265,11 +282,26 @@ pub fn main() anyerror!void {
         );
 
         rl.EndMode2D();
-        if (mode == .Edit) {
-            draw_player_debug_info(alloc, &player, screenWidth, screenHeight);
-            draw_env_entities_debug_info(alloc, &env, screenWidth, screenHeight);
+        if (mode == .Debug) {
             // Immediate Mode UI
             //------------------------------------------------------------------------------
+            draw_player_debug_info(alloc, &player, screenWidth, screenHeight);
+            draw_env_entities_debug_info(alloc, env, screenWidth, screenHeight);
+            rl.DrawFPS(20, 20);
+        } else if (mode == .Edit) {
+            const pos = rl.GetMousePosition();
+            if (selected) |sel| {
+                const dim: rl.Vector2 = switch (sel) {
+                    .Platform => .{ .x = 128, .y = 16 },
+                    .Wall => .{ .x = 16, .y = 128 },
+                };
+                rl.DrawRectangleRec(.{
+                    .x = pos.x,
+                    .y = pos.y,
+                    .width = dim.x,
+                    .height = dim.y,
+                }, rl.DARKGRAY);
+            }
             draw_toolbar(
                 .{
                     .x = 30,
@@ -281,14 +313,47 @@ pub fn main() anyerror!void {
                 &toolbar,
                 &selected,
             );
-            //------------------------------------------------------------------------------
-            rl.DrawFPS(20, 20);
         }
         //----------------------------------------------------------------------------------
     }
 }
 
-fn draw_toolbar(pos: rl.Vector2, w: f32, h: f32, col: rl.Color, tb: *UI, sel: *?u8) void {
+fn add_to_env_items(alloc: std.mem.Allocator, env: []?EnvItem, new_item: EnvItem) ![]?EnvItem {
+    var added_new_item = false;
+    const n = env.len;
+    if (env[((n / 5) * 4)] == null) {
+        var i: usize = 0;
+        while (i < (env.len - 1) and env[i] != null) : (i += 1) {
+            if (env[i + 1] == null and !added_new_item) {
+                env[i + 1] = new_item;
+                added_new_item = true;
+            }
+        }
+    } else {
+        var new_env = try alloc.alloc(?EnvItem, n * 2);
+        var i: usize = 0;
+        while (i < new_env.len - 1) : (i += 1) {
+            if (i < n and !added_new_item) {
+                new_env[i] = env[i];
+                if (env[i] == null) {
+                    new_env[i] = new_item;
+                    added_new_item = true;
+                }
+            } else {
+                if (!added_new_item) {
+                    new_env[i] = new_item;
+                    added_new_item = true;
+                } else {
+                    new_env[i] = null;
+                }
+            }
+        }
+        return new_env;
+    }
+    return env;
+}
+
+fn draw_toolbar(pos: rl.Vector2, w: f32, h: f32, col: rl.Color, tb: *UI, sel: *?ElemID) void {
     rl.DrawRectangleRec(
         .{
             .x = pos.x,
@@ -298,12 +363,19 @@ fn draw_toolbar(pos: rl.Vector2, w: f32, h: f32, col: rl.Color, tb: *UI, sel: *?
         },
         col,
     );
+    rl.DrawRectangleRec(.{ .x = pos.x + 8, .y = pos.y, .width = 32, .height = 32 }, rl.DARKGRAY);
     if (tb.button(0, .{ .x = pos.x + 8, .y = pos.y, .width = 32, .height = 32 })) {
-        sel.* = 0;
+        sel.* = @enumFromInt(0);
     }
 }
 
-fn draw_env_entities_debug_info(alloc: std.mem.Allocator, env: []EnvItem, screenWidth: i32, screenHeight: i32) void {
+//*************************//
+//      *** TODO ***       //
+// ----------------------- //
+// Actually do the thing I //
+//    planned on doing     //
+//*************************//
+fn draw_env_entities_debug_info(alloc: std.mem.Allocator, env: []?EnvItem, screenWidth: i32, screenHeight: i32) void {
     _ = screenHeight;
     _ = screenWidth;
     _ = env;
@@ -339,7 +411,7 @@ fn draw_player_debug_info(alloc: std.mem.Allocator, player: *Player, screenWidth
     rl.DrawText(player_info_str, screenWidth - 330, 30, 24, rl.WHITE);
 }
 
-fn update_player(player: *Player, env: []EnvItem, delta_time: f32) void {
+fn update_player(player: *Player, env: []?EnvItem, delta_time: f32) void {
     if (rl.IsKeyDown(rl.KEY_A)) player.dx = PLAYER_MOVE_SPEED * -1;
     if (rl.IsKeyDown(rl.KEY_D)) player.dx = PLAYER_MOVE_SPEED;
     if (rl.IsKeyDown(rl.KEY_SPACE) and player.can_jump) {
@@ -355,8 +427,8 @@ fn update_player(player: *Player, env: []EnvItem, delta_time: f32) void {
 
     var hit_vertical_obstacle = false;
     var hit_horizontal_obstacle = false;
-    for (env) |item| {
-        switch (item.id) {
+    for (env) |env_item| {
+        if (env_item) |item| switch (item.id) {
             .Platform => {
                 if (item.blocking and
                     item.rect.x <= player.pos.x + player.size.x and
@@ -371,17 +443,25 @@ fn update_player(player: *Player, env: []EnvItem, delta_time: f32) void {
             },
             .Wall => {
                 if (item.blocking and
+                    item.rect.x <= player.pos.x + player.size.x and
+                    item.rect.x + item.rect.width >= player.pos.x and
+                    item.rect.y >= player.pos.y and
+                    item.rect.y <= player.pos.y + player.dy * delta_time)
+                {
+                    hit_vertical_obstacle = true;
+                    player.dy = 0;
+                    player.pos.y = item.rect.y;
+                } else if (item.blocking and
                     item.rect.x <= player.pos.x + player.size.x + player.dx * delta_time and
                     item.rect.x + item.rect.width >= player.pos.x + player.dx * delta_time and
                     item.rect.y + item.rect.height >= player.pos.y - player.size.y and
                     item.rect.y <= player.pos.y + player.dy * delta_time)
                 {
                     hit_horizontal_obstacle = true;
-                    std.debug.print("player hit wall\n", .{});
                     player.dx = 0;
                 }
             },
-        }
+        };
     }
 
     if (!hit_vertical_obstacle) {
@@ -393,6 +473,8 @@ fn update_player(player: *Player, env: []EnvItem, delta_time: f32) void {
     }
     if (!hit_horizontal_obstacle) {
         player.pos.x += player.dx * delta_time;
+    } else {
+        player.can_jump = true;
     }
 }
 
