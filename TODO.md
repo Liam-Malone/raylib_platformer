@@ -4,7 +4,7 @@
 
 - [x] Figure out texture drawing in Raylib
 - [-] Immediate mode GUI
-- [ ] Re-implement movement animation
+- [x] Re-implement movement animation
 - [ ] Draw background image
 - [ ] Maybe toy with shaders on something??
 
