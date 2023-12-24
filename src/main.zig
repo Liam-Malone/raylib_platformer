@@ -87,14 +87,12 @@ const UI = struct {
 // END STRUCTS
 
 // BEGIN CONSTANTS
-const GRAVITY = 900;
+const GRAVITY = 1200;
 const PLAYER_JUMP_SPEED = 450.0;
 const PLAYER_MOVE_SPEED = 400.0;
 // END CONSTANTS
 
 pub fn main() anyerror!void {
-    // Initialization
-    //--------------------------------------------------------------------------------------
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var alloc = gpa.allocator();
 
@@ -106,12 +104,13 @@ pub fn main() anyerror!void {
     const screenHeight = 10 * window_scale;
 
     rl.InitWindow(screenWidth, screenHeight, "platformer");
-    defer rl.CloseWindow(); // Close window and OpenGL context
+    defer rl.CloseWindow();
 
     var mode: Mode = .Play;
 
     var player: Player = Player{};
     player.pos = rl.Vector2{ .x = 300, .y = 200 };
+    var player_tex_offset: rl.Vector2 = .{ .x = 0, .y = 64 };
 
     var tex: rl.Texture2D = rl.LoadTexture("assets/texmap.png");
 
@@ -129,7 +128,7 @@ pub fn main() anyerror!void {
         EnvItem{
             .rect = .{
                 .x = 300,
-                .y = 200,
+                .y = 250,
                 .width = 400,
                 .height = 10,
             },
@@ -139,7 +138,7 @@ pub fn main() anyerror!void {
         EnvItem{
             .rect = .{
                 .x = 250,
-                .y = 300,
+                .y = 325,
                 .width = 100,
                 .height = 10,
             },
@@ -172,16 +171,25 @@ pub fn main() anyerror!void {
     var debug_menu = UI{ .id = 1 };
     _ = debug_menu;
 
+    var draw_tick: i64 = std.time.milliTimestamp();
+    var player_tick_counter: u8 = 0;
+
     var selected: ?ElemID = null;
 
     rl.SetTargetFPS(60);
     rl.SetExitKey(rl.KEY_Q);
-    //--------------------------------------------------------------------------------------
 
     while (!rl.WindowShouldClose()) {
         // Update
         //----------------------------------------------------------------------------------
         const delta_time: f32 = rl.GetFrameTime();
+
+        var ticked_draw = false;
+        const new_tick: i64 = std.time.milliTimestamp();
+        if (new_tick - draw_tick > 200) {
+            draw_tick = new_tick;
+            ticked_draw = true;
+        }
 
         switch (mode) {
             .Debug => {
@@ -228,6 +236,22 @@ pub fn main() anyerror!void {
         }
         update_player(&player, env, delta_time);
 
+        if (ticked_draw) {
+            if (player.dx != 0 and player.dy == 0) {
+                player_tex_offset.x = if (player_tex_offset.x == 0) 96 else 0;
+            } else if (player.dx == 0 and player.dy != 0) {
+                // fall animation
+            } else {
+                if (player_tex_offset.x != 32 and player_tex_offset.x != 64) player_tex_offset.x = 32;
+                if (player_tick_counter == 3) {
+                    player_tex_offset.x = if (player_tex_offset.x == 64) 32 else 64;
+                    player_tick_counter = 0;
+                } else {
+                    player_tick_counter += 1;
+                }
+            }
+        }
+
         camera.zoom += rl.GetMouseWheelMove() * 0.05;
 
         if (camera.zoom > 3.0) {
@@ -263,7 +287,12 @@ pub fn main() anyerror!void {
 
         rl.DrawTexturePro(
             tex,
-            .{ .x = 0, .y = 64, .width = 24, .height = 31 },
+            .{
+                .x = player_tex_offset.x,
+                .y = player_tex_offset.y,
+                .width = if (player.dx < 0) -24 else 24,
+                .height = 31,
+            },
             player_rect,
             .{ .x = 0, .y = 64 },
             0,
@@ -458,6 +487,7 @@ fn update_player(player: *Player, env: []?EnvItem, delta_time: f32) void {
                     item.rect.y <= player.pos.y + player.dy * delta_time)
                 {
                     hit_horizontal_obstacle = true;
+                    player.dy -= (GRAVITY / 2) * delta_time;
                     player.dx = 0;
                 }
             },
