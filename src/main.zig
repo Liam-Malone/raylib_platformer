@@ -510,7 +510,7 @@ fn update_player(player: *Player, env: []?EnvItem, delta_time: f32) void {
                     item.rect.y <= player.pos.y + player.dy * delta_time)
                 {
                     hit_horizontal_obstacle = true;
-                    player.dy -= (GRAVITY / 2) * delta_time;
+                    player.dy -= if (player.dy > 0) (GRAVITY / 2) * delta_time else player.dy * delta_time;
                     player.dx = 0;
                 }
             },
