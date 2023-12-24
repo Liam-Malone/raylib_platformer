@@ -252,7 +252,7 @@ pub fn main() anyerror!void {
             }
         }
 
-        camera.zoom += rl.GetMouseWheelMove() * 0.05;
+        if (rl.IsKeyDown(rl.KEY_LEFT_CONTROL) or rl.IsKeyDown(rl.KEY_RIGHT_CONTROL)) camera.zoom += rl.GetMouseWheelMove() * 0.05;
 
         if (camera.zoom > 3.0) {
             camera.zoom = 3.0;
@@ -265,7 +265,13 @@ pub fn main() anyerror!void {
             player.pos = rl.Vector2{ .x = 300, .y = 200 };
         }
 
-        update_cam(&camera, &player, screenWidth, screenHeight);
+        if (mode != .Edit) {
+            update_cam(&camera, &player, screenWidth, screenHeight);
+        } else {
+            const scroll = rl.GetMouseWheelMoveV();
+            camera.offset.x += scroll.x * 15;
+            camera.offset.y += scroll.y * 15;
+        }
 
         // Draw
         //----------------------------------------------------------------------------------
@@ -311,6 +317,17 @@ pub fn main() anyerror!void {
         );
 
         rl.EndMode2D();
+        rl.DrawText(
+            switch (mode) {
+                .Edit => "Mode: Edit",
+                .Debug => "Mode: Debug",
+                .Play => "Mode: Play",
+            },
+            300,
+            10,
+            30,
+            rl.WHITE,
+        );
         if (mode == .Debug) {
             // Immediate Mode UI
             //------------------------------------------------------------------------------
@@ -392,9 +409,15 @@ fn draw_toolbar(pos: rl.Vector2, w: f32, h: f32, col: rl.Color, tb: *UI, sel: *?
         },
         col,
     );
-    rl.DrawRectangleRec(.{ .x = pos.x + 8, .y = pos.y, .width = 32, .height = 32 }, rl.DARKGRAY);
-    if (tb.button(0, .{ .x = pos.x + 8, .y = pos.y, .width = 32, .height = 32 })) {
+    var rect: rl.Rectangle = .{ .x = pos.x + 8, .y = pos.y + 8, .width = 32, .height = 32 };
+    rl.DrawRectangleRec(rect, rl.DARKGRAY);
+    if (tb.button(0, rect)) {
         sel.* = @enumFromInt(0);
+    }
+    rect.x += 8 + rect.width;
+    rl.DrawRectangleRec(rect, rl.PURPLE);
+    if (tb.button(1, rect)) {
+        sel.* = @enumFromInt(1);
     }
 }
 
