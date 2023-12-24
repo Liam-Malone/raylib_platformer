@@ -1,6 +1,6 @@
 # REWRITING PLATFORMER IN RAYLIB
 
-I'm rewriting my SDL2 platformer in Raylib, and reworking my approaches to some things.
+I'm porting my SDL2 platformer to Raylib, and reworking a lot of it as I do so.
 
 ## Quick Start
 
