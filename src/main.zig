@@ -30,6 +30,7 @@ const Color = enum(u32) {
 const ElemID = enum {
     Platform,
     Wall,
+    Portal,
 };
 
 const Mode = enum {
@@ -47,6 +48,13 @@ const EnvItem = struct {
     blocking: bool = true,
     col: rl.Color = rl.GRAY,
 };
+
+// Portal is EnvItme with id 'portal'.. creates portal..
+// Figure out how to leave it as EnvItem....
+const Portal =  struct {
+    pos: rl.Vector2,
+    link: ?*Portal,
+}
 
 const Player = struct {
     pos: rl.Vector2 = .{ .x = 0, .y = 0 },
@@ -105,6 +113,12 @@ pub fn main() anyerror!void {
 
     rl.InitWindow(screenWidth, screenHeight, "platformer");
     defer rl.CloseWindow();
+    rl.InitAudioDevice();
+    defer rl.CloseAudioDevice();
+
+    const music = rl.LoadMusicStream("assets/sounds/8_Bit_Nostalgia.mp3");
+    rl.PlayMusicStream(music);
+    defer rl.UnloadMusicStream(music);
 
     var mode: Mode = .Play;
 
@@ -182,6 +196,7 @@ pub fn main() anyerror!void {
     while (!rl.WindowShouldClose()) {
         // Update
         //----------------------------------------------------------------------------------
+        rl.UpdateMusicStream(music);
         const delta_time: f32 = rl.GetFrameTime();
 
         var ticked_draw = false;
@@ -213,7 +228,7 @@ pub fn main() anyerror!void {
                                 .rect = switch (sel) {
                                     .Wall => .{
                                         .x = pos.x - (camera.offset.x - camera.target.x),
-                                        .y = pos.y - (camera.offset.y - camera.target.x),
+                                        .y = pos.y - (camera.offset.y - camera.target.y),
                                         .width = 16,
                                         .height = 128,
                                     },
