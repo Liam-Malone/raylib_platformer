@@ -72,10 +72,10 @@ const EnvItem = struct {
 //      -> this will require restructuring the editor a bit              //
 //***********************************************************************//
 
-const Portal =  struct {
+const Portal = struct {
     pos: rl.Vector2,
     link: ?*Portal,
-}
+};
 
 const Player = struct {
     pos: rl.Vector2 = .{ .x = 0, .y = 0 },
@@ -274,6 +274,12 @@ pub fn main() anyerror!void {
                                         .width = 128,
                                         .height = 16,
                                     },
+                                    .Portal => .{
+                                        .x = pos.x - (camera.offset.x - camera.target.x),
+                                        .y = pos.y - (camera.offset.y - camera.target.y),
+                                        .width = 10,
+                                        .height = 16,
+                                    },
                                 },
                             },
                         );
@@ -391,6 +397,7 @@ pub fn main() anyerror!void {
                 const dim: rl.Vector2 = switch (sel) {
                     .Platform => .{ .x = 128, .y = 16 },
                     .Wall => .{ .x = 16, .y = 128 },
+                    .Portal => .{ .x = 0, .y = 0 },
                 };
                 rl.DrawRectangleRec(.{
                     .x = pos.x,
@@ -565,6 +572,7 @@ fn update_player(player: *Player, env: []?EnvItem, delta_time: f32) void {
                     player.dx = 0;
                 }
             },
+            .Portal => {},
         };
     }
 
