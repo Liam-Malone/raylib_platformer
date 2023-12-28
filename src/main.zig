@@ -49,8 +49,29 @@ const EnvItem = struct {
     col: rl.Color = rl.GRAY,
 };
 
-// Portal is EnvItme with id 'portal'.. creates portal..
-// Figure out how to leave it as EnvItem....
+//***********************************************************************//
+//                                                                       //
+//                             *** TODO ***                              //
+//                                                                       //
+// --------------------------------------------------------------------- //
+//                                                                       //
+//  Previous approach was to make Portals a separate element entirely.   //
+//  I want to be able to have a regular EnvItem that happens to act as   //
+//  as a portal. My current Idea is to give a UID to each item and refar //
+//  that way. I need something better to enable linking of portals       //
+//  without having every single EnvItem contain a pointer.               //
+//                                                                       //
+//  IDEAS (in order of how much I like them):                            //
+//    - Create Separate Portal Array -- add pairs, with UUID identifier  //
+//    - Just Portal Array, give pointers, hope it's correct              //
+//    - Add 'portal-link' prop to EnvItem and only use for portal        //
+//                                                                       //
+//  OTHER IDEA:                                                          //
+//    - Just fully seaparate portals from EnvItem -- they share id, but  //
+//      Will be in separate array, of separate struct type               //
+//      -> this will require restructuring the editor a bit              //
+//***********************************************************************//
+
 const Portal =  struct {
     pos: rl.Vector2,
     link: ?*Portal,
@@ -64,6 +85,21 @@ const Player = struct {
     can_jump: bool = false,
 };
 
+//***********************************************************************//
+//                                                                       //
+//                             *** TODO ***                              //
+//                                                                       //
+// --------------------------------------------------------------------- //
+//  Improve and flesh out UI struct more, move out to separate file when //
+//  struct begins to get larger and more comprehensive                   //
+//                                                                       //
+//  FEATURES MISSING:                                                    //
+//      - Dropdown UI Element                                            //
+//      - Debug Info Box (implemented in terms of the above)             //
+//      - Basic Menu -- for a settngs menu                               //
+//      - Need to write a proper title screen -- with access to settings //
+//                                                                       //
+//***********************************************************************//
 const UI = struct {
     id: u8,
     hot_id: ?u8 = null,
