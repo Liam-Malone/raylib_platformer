@@ -49,9 +49,10 @@
 //
 static void handleKeyEvent(_GLFWjoystick* js, int code, int value)
 {
-    _glfwInputJoystickButton(js,
+    if (code - BTN_MISC >= 0) _glfwInputJoystickButton(js,
                              js->linjs.keyMap[code - BTN_MISC],
                              value ? GLFW_PRESS : GLFW_RELEASE);
+
 }
 
 // Apply an EV_ABS event to the specified joystick

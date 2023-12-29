@@ -1208,6 +1208,7 @@ void PollInputEvents(void)
             // Get current axis state
             const float *axes = state.axes;
 
+
             for (int k = 0; (axes != NULL) && (k < GLFW_GAMEPAD_AXIS_LAST + 1) && (k < MAX_GAMEPAD_AXIS); k++)
             {
                 CORE.Input.Gamepad.axisState[i][k] = axes[k];

@@ -18,7 +18,7 @@ pub fn addRaylib(b: *std.Build, target: std.zig.CrossTarget, optimize: std.built
 
     // No GLFW required on PLATFORM_DRM
     if (!options.platform_drm) {
-        raylib.addIncludePath(.{ .path = srcdir ++ "/external/glfw/include" });
+        raylib.addIncludePath(.{ .path = srcdir ++ "/external/glfw-rel/include" });
     }
 
     addCSourceFilesVersioned(raylib, &.{
