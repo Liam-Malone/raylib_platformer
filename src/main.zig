@@ -35,6 +35,7 @@ const Color = enum(u32) {
 };
 
 const ElemID = enum {
+    None,
     Platform,
     Wall,
     Portal,
@@ -50,7 +51,7 @@ const Mode = enum {
 // BEGIN STRUCTS
 //----------------------------------------------------------------------------------
 const EnvItem = struct {
-    id: ElemID = .Platform,
+    id: ElemID = .None,
     pos: rl.Vector2 = .{ .x = 0, .y = 0 },
     rect: rl.Rectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
     blocking: bool = true,
@@ -79,7 +80,6 @@ const EnvItem = struct {
 //      but will be in separate array, of separate struct type           //
 //      -> this will require restructuring the editor a bit              //
 //***********************************************************************//
-
 const Portal = struct {
     pos: rl.Vector2,
     link: ?*Portal,
@@ -183,6 +183,7 @@ pub fn main() anyerror!void {
 
     var start_env = [_]?EnvItem{
         EnvItem{
+            .id = .Platform,
             .rect = .{
                 .x = 0,
                 .y = 400,
@@ -193,6 +194,7 @@ pub fn main() anyerror!void {
             .blocking = true,
         },
         EnvItem{
+            .id = .Platform,
             .rect = .{
                 .x = 300,
                 .y = 250,
@@ -203,6 +205,7 @@ pub fn main() anyerror!void {
             .blocking = true,
         },
         EnvItem{
+            .id = .Platform,
             .rect = .{
                 .x = 250,
                 .y = 325,
@@ -213,13 +216,13 @@ pub fn main() anyerror!void {
             .blocking = true,
         },
         EnvItem{
+            .id = .Wall,
             .rect = .{
                 .x = 800,
                 .y = 100,
                 .width = 10,
                 .height = 200,
             },
-            .id = .Wall,
             .col = rl.GRAY,
             .blocking = true,
         },
@@ -244,7 +247,7 @@ pub fn main() anyerror!void {
     var draw_tick: i64 = std.time.milliTimestamp();
     var player_tick_counter: u8 = 0;
 
-    var selected: ?ElemID = null;
+    var selected: ElemID = .None;
 
     rl.SetTargetFPS(TARGET_FPS);
     rl.SetExitKey(EXIT_KEY);
@@ -281,35 +284,34 @@ pub fn main() anyerror!void {
             .Edit => {
                 if (rl.IsKeyPressed(rl.KEY_F5)) mode = .Play;
                 if (rl.IsKeyPressed(rl.KEY_F3)) mode = .Debug;
-                if (selected) |sel| {
-                    if (rl.IsMouseButtonPressed(1)) selected = null;
-                    if (rl.IsMouseButtonPressed(0)) {
-                        const pos = rl.GetMousePosition();
-                        env.append(.{
-                            .id = sel,
-                            .pos = pos,
-                            .rect = switch (sel) {
-                                .Wall => .{
-                                    .x = pos.x - (camera.offset.x - camera.target.x),
-                                    .y = pos.y - (camera.offset.y - camera.target.y),
-                                    .width = 16,
-                                    .height = 128,
-                                },
-                                .Platform => .{
-                                    .x = pos.x - (camera.offset.x - camera.target.x),
-                                    .y = pos.y - (camera.offset.y - camera.target.y),
-                                    .width = 128,
-                                    .height = 16,
-                                },
-                                .Portal => .{
-                                    .x = pos.x - (camera.offset.x - camera.target.x),
-                                    .y = pos.y - (camera.offset.y - camera.target.y),
-                                    .width = 10,
-                                    .height = 16,
-                                },
+                if (rl.IsMouseButtonPressed(1)) selected = .None;
+                if (rl.IsMouseButtonPressed(0)) {
+                    const pos = rl.GetMousePosition();
+                    env.append(.{
+                        .id = selected,
+                        .pos = pos,
+                        .rect = switch (selected) {
+                            .Wall => .{
+                                .x = pos.x - (camera.offset.x - camera.target.x),
+                                .y = pos.y - (camera.offset.y - camera.target.y),
+                                .width = 16,
+                                .height = 128,
                             },
-                        }) catch try stderr.print("Failed to add item of id {any} to env arraylist\n", .{sel});
-                    }
+                            .Platform => .{
+                                .x = pos.x - (camera.offset.x - camera.target.x),
+                                .y = pos.y - (camera.offset.y - camera.target.y),
+                                .width = 128,
+                                .height = 16,
+                            },
+                            .Portal => .{
+                                .x = pos.x - (camera.offset.x - camera.target.x),
+                                .y = pos.y - (camera.offset.y - camera.target.y),
+                                .width = 10,
+                                .height = 16,
+                            },
+                            else => .{ .x = 0, .y = 0, .width = 0, .height = 0 },
+                        },
+                    }) catch try stderr.print("Failed to add item of id {any} to env arraylist\n", .{selected});
                 }
             },
             .Play => {
@@ -439,19 +441,18 @@ pub fn main() anyerror!void {
             rl.DrawFPS(20, 20);
         } else if (mode == .Edit) {
             const pos = rl.GetMousePosition();
-            if (selected) |sel| {
-                const dim: rl.Vector2 = switch (sel) {
-                    .Platform => .{ .x = 128, .y = 16 },
-                    .Wall => .{ .x = 16, .y = 128 },
-                    .Portal => .{ .x = 0, .y = 0 },
-                };
-                rl.DrawRectangleRec(.{
-                    .x = pos.x,
-                    .y = pos.y,
-                    .width = dim.x,
-                    .height = dim.y,
-                }, rl.DARKGRAY);
-            }
+            const dim: rl.Vector2 = switch (selected) {
+                .Platform => .{ .x = 128, .y = 16 },
+                .Wall => .{ .x = 16, .y = 128 },
+                .Portal => .{ .x = 0, .y = 0 },
+                else => .{ .x = 0, .y = 0 },
+            };
+            rl.DrawRectangleRec(.{
+                .x = pos.x,
+                .y = pos.y,
+                .width = dim.x,
+                .height = dim.y,
+            }, rl.DARKGRAY);
             draw_toolbar(
                 .{
                     .x = 30,
@@ -469,7 +470,7 @@ pub fn main() anyerror!void {
     }
 }
 
-fn draw_toolbar(pos: rl.Vector2, w: f32, h: f32, col: rl.Color, tb: *UI, sel: *?ElemID) void {
+fn draw_toolbar(pos: rl.Vector2, w: f32, h: f32, col: rl.Color, tb: *UI, sel: *ElemID) void {
     rl.DrawRectangleRec(
         .{
             .x = pos.x,
@@ -482,12 +483,12 @@ fn draw_toolbar(pos: rl.Vector2, w: f32, h: f32, col: rl.Color, tb: *UI, sel: *?
     var rect: rl.Rectangle = .{ .x = pos.x + 8, .y = pos.y + 8, .width = 32, .height = 32 };
     rl.DrawRectangleRec(rect, rl.DARKGRAY);
     if (tb.button(0, rect)) {
-        sel.* = @enumFromInt(0);
+        sel.* = .Platform;
     }
     rect.x += 8 + rect.width;
     rl.DrawRectangleRec(rect, rl.PURPLE);
     if (tb.button(1, rect)) {
-        sel.* = @enumFromInt(1);
+        sel.* = .Wall;
     }
 }
 
@@ -595,6 +596,7 @@ fn update_player(player: *Player, env: []?EnvItem, delta_time: f32) void {
                 }
             },
             .Portal => {},
+            else => {},
         } else std.debug.print("hit a null...\n", .{});
     }
 
