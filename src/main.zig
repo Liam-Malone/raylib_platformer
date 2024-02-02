@@ -1,146 +1,16 @@
 const rl = @import("rl.zig");
 const std = @import("std");
 const builtin = @import("builtin");
+const types = @import("types.zig");
+const map = @import("map.zig");
 
+// BEGIN CONSTANTS
+//----------------------------------------------------------------------------------
 pub const EXIT_KEY = switch (builtin.mode) {
     .Debug => rl.KEY_Q,
     else => rl.KEY_NULL,
 };
 
-// BEGIN ENUMS
-//----------------------------------------------------------------------------------
-const Color = enum(u32) {
-    white = 0xFFFFFFFF,
-    purple = 0x7BF967AA,
-    red = 0xFC1A17CC,
-    dark_gray = 0x18181822,
-    blue = 0x0000CCFF,
-    green = 0x00AA0022,
-    void = 0xFF00FFFF,
-
-    pub fn make_rl_color(col: Color) rl.Color {
-        var color = @intFromEnum(col);
-        const r: u8 = @truncate((color >> (3 * 8)) & 0xFF);
-        const g: u8 = @truncate((color >> (2 * 8)) & 0xFF);
-        const b: u8 = @truncate((color >> (1 * 8)) & 0xFF);
-        const a: u8 = @truncate((color >> (0 * 8)) & 0xFF);
-
-        return rl.Color{
-            .r = r,
-            .g = g,
-            .b = b,
-            .a = a,
-        };
-    }
-};
-
-const ElemID = enum {
-    None,
-    Platform,
-    Wall,
-    Portal,
-};
-
-const Mode = enum {
-    Debug,
-    Edit,
-    Play,
-};
-//----------------------------------------------------------------------------------
-
-// BEGIN STRUCTS
-//----------------------------------------------------------------------------------
-const EnvItem = struct {
-    id: ElemID = .None,
-    pos: rl.Vector2 = .{ .x = 0, .y = 0 },
-    rect: rl.Rectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
-    blocking: bool = true,
-    col: rl.Color = rl.GRAY,
-};
-
-//***********************************************************************//
-//                                                                       //
-//                             *** TODO ***                              //
-//                                                                       //
-// --------------------------------------------------------------------- //
-//                                                                       //
-//  Previous approach was to make Portals a separate element entirely.   //
-//  I want to be able to have a regular EnvItem that happens to act as   //
-//  as a portal. My current Idea is to give a UID to each item and refer //
-//  that way. I need something better to enable linking of portals       //
-//  without having every single EnvItem contain a pointer.               //
-//                                                                       //
-//  IDEAS (in order of how much I like them):                            //
-//    - Create Separate Portal Array -- add pairs, with UUID identifier  //
-//    - Just Portal Array, give pointers, hope it's correct              //
-//    - Add 'portal-link' prop to EnvItem and only use for portal        //
-//                                                                       //
-//  OTHER IDEA:                                                          //
-//    - Just fully separate portals from EnvItem -- they share ID enum,  //
-//      but will be in separate array, of separate struct type           //
-//      -> this will require restructuring the editor a bit              //
-//***********************************************************************//
-const Portal = struct {
-    pos: rl.Vector2,
-    link: ?*Portal,
-};
-
-const Player = struct {
-    pos: rl.Vector2 = .{ .x = 0, .y = 0 },
-    dy: f32 = 0,
-    dx: f32 = 0,
-    size: rl.Vector2 = .{ .x = 48, .y = 62 },
-    can_jump: bool = false,
-};
-
-//***********************************************************************//
-//                                                                       //
-//                             *** TODO ***                              //
-//                                                                       //
-// --------------------------------------------------------------------- //
-//  Improve and flesh out UI struct more, move out to separate file when //
-//  struct begins to get larger and more comprehensive                   //
-//                                                                       //
-//  FEATURES MISSING:                                                    //
-//      - Dropdown UI Element                                            //
-//      - Debug Info Box (implemented in terms of the above)             //
-//      - Basic Menu -- for a settngs menu                               //
-//      - Need to write a proper title screen -- with access to settings //
-//                                                                       //
-//***********************************************************************//
-const UI = struct {
-    id: u8,
-    hot_id: ?u8 = null,
-    active_id: ?u8 = null,
-
-    pub fn button(ui: *UI, id: u8, rect: rl.Rectangle) bool {
-        const mouse = rl.GetMousePosition();
-        if (ui.hot_id) |h_id| {
-            if (h_id == id) {
-                rl.DrawRectangleLinesEx(rect, 0.8, rl.PURPLE);
-                // handle hot
-            }
-        }
-        if (ui.active_id) |a_id| {
-            if (a_id == id) {
-                ui.active_id = null;
-                std.debug.print("I'm doing my part!!\n", .{});
-                return true;
-            }
-        }
-
-        if (rl.CheckCollisionPointRec(mouse, rect)) {
-            if (rl.IsMouseButtonPressed(0)) {
-                ui.active_id = id;
-            } else {}
-        }
-        return false;
-    }
-};
-//----------------------------------------------------------------------------------
-
-// BEGIN CONSTANTS
-//----------------------------------------------------------------------------------
 const GRAVITY = 1200;
 const PLAYER_JUMP_SPEED = 450.0;
 const PLAYER_MOVE_SPEED = 400.0;
@@ -173,16 +43,16 @@ pub fn main() anyerror!void {
     var music_volume: f32 = 0.6;
     rl.SetMusicVolume(music, 0);
 
-    var mode: Mode = .Play;
+    var mode: types.Mode = .Play;
 
-    var player: Player = Player{};
+    var player: types.Player = types.Player{};
     player.pos = rl.Vector2{ .x = 300, .y = 200 };
     var player_tex_offset: rl.Vector2 = .{ .x = 0, .y = 64 };
 
     var tex: rl.Texture2D = rl.LoadTexture("assets/texmap.png");
 
-    var start_env = [_]?EnvItem{
-        EnvItem{
+    var start_env = [_]?types.EnvItem{
+        types.EnvItem{
             .id = .Platform,
             .rect = .{
                 .x = 0,
@@ -193,7 +63,7 @@ pub fn main() anyerror!void {
             .col = rl.GRAY,
             .blocking = true,
         },
-        EnvItem{
+        types.EnvItem{
             .id = .Platform,
             .rect = .{
                 .x = 300,
@@ -204,7 +74,7 @@ pub fn main() anyerror!void {
             .col = rl.GRAY,
             .blocking = true,
         },
-        EnvItem{
+        types.EnvItem{
             .id = .Platform,
             .rect = .{
                 .x = 250,
@@ -215,7 +85,7 @@ pub fn main() anyerror!void {
             .col = rl.GRAY,
             .blocking = true,
         },
-        EnvItem{
+        types.EnvItem{
             .id = .Wall,
             .rect = .{
                 .x = 800,
@@ -229,7 +99,7 @@ pub fn main() anyerror!void {
         null,
     };
 
-    var env: std.ArrayList(?EnvItem) = std.ArrayList(?EnvItem).init(alloc);
+    var env: std.ArrayList(?types.EnvItem) = std.ArrayList(?types.EnvItem).init(alloc);
     for (start_env, 0..) |_, i| {
         if (start_env[i] != null) try env.append(start_env[i]);
     }
@@ -240,14 +110,14 @@ pub fn main() anyerror!void {
         .rotation = 0,
         .target = player.pos,
     };
-    var toolbar = UI{ .id = 0 };
-    var debug_menu = UI{ .id = 1 };
+    var toolbar = types.UI{ .id = 0 };
+    var debug_menu = types.UI{ .id = 1 };
     _ = debug_menu;
 
     var draw_tick: i64 = std.time.milliTimestamp();
     var player_tick_counter: u8 = 0;
 
-    var selected: ElemID = .None;
+    var selected: types.ElemID = .None;
 
     rl.SetTargetFPS(TARGET_FPS);
     rl.SetExitKey(EXIT_KEY);
@@ -460,7 +330,7 @@ pub fn main() anyerror!void {
                 },
                 100,
                 300,
-                Color.make_rl_color(Color.dark_gray),
+                types.Color.make_rl_color(types.Color.dark_gray),
                 &toolbar,
                 &selected,
             );
@@ -470,7 +340,7 @@ pub fn main() anyerror!void {
     }
 }
 
-fn draw_toolbar(pos: rl.Vector2, w: f32, h: f32, col: rl.Color, tb: *UI, sel: *ElemID) void {
+fn draw_toolbar(pos: rl.Vector2, w: f32, h: f32, col: rl.Color, tb: *types.UI, sel: *types.ElemID) void {
     rl.DrawRectangleRec(
         .{
             .x = pos.x,
@@ -508,14 +378,14 @@ fn draw_toolbar(pos: rl.Vector2, w: f32, h: f32, col: rl.Color, tb: *UI, sel: *E
 //  living entities.                                                     //
 //                                                                       //
 //***********************************************************************//
-fn draw_env_entities_debug_info(alloc: std.mem.Allocator, env: []?EnvItem, screenWidth: i32, screenHeight: i32) void {
+fn draw_env_entities_debug_info(alloc: std.mem.Allocator, env: []?types.EnvItem, screenWidth: i32, screenHeight: i32) void {
     _ = screenHeight;
     _ = screenWidth;
     _ = env;
     _ = alloc;
 }
 
-fn draw_player_debug_info(alloc: std.mem.Allocator, player: *Player, screenWidth: i32, screenHeight: i32) void {
+fn draw_player_debug_info(alloc: std.mem.Allocator, player: *types.Player, screenWidth: i32, screenHeight: i32) void {
     _ = screenHeight;
     rl.DrawRectangleRec(
         rl.Rectangle{
@@ -524,7 +394,7 @@ fn draw_player_debug_info(alloc: std.mem.Allocator, player: *Player, screenWidth
             .width = 300,
             .height = 130,
         },
-        Color.make_rl_color(Color.green),
+        types.Color.make_rl_color(types.Color.green),
     );
 
     var str = std.fmt.allocPrint(
@@ -544,7 +414,7 @@ fn draw_player_debug_info(alloc: std.mem.Allocator, player: *Player, screenWidth
     rl.DrawText(player_info_str, screenWidth - 330, 30, 24, rl.WHITE);
 }
 
-fn update_player(player: *Player, env: []?EnvItem, delta_time: f32) void {
+fn update_player(player: *types.Player, env: []?types.EnvItem, delta_time: f32) void {
     if (rl.IsKeyDown(rl.KEY_A)) player.dx = PLAYER_MOVE_SPEED * -1;
     if (rl.IsKeyDown(rl.KEY_D)) player.dx = PLAYER_MOVE_SPEED;
     if (rl.IsKeyDown(rl.KEY_SPACE) and player.can_jump) {
@@ -614,7 +484,7 @@ fn update_player(player: *Player, env: []?EnvItem, delta_time: f32) void {
     }
 }
 
-fn update_cam(cam: *rl.Camera2D, player: *Player, w: i32, h: i32) void {
+fn update_cam(cam: *rl.Camera2D, player: *types.Player, w: i32, h: i32) void {
     const bbox = rl.Vector2{ .x = 0.2, .y = 0.2 };
 
     const bboxWorldMin: rl.Vector2 = rl.GetScreenToWorld2D(

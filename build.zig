@@ -13,9 +13,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    var rl = ray.addRaylib(b, target, optimize, .{
-        .platform_drm = false,
-    });
+    var rl = ray.addRaylib(b, target, optimize, .{});
     exe.addIncludePath(.{ .path = "deps/raylib-5.0/src" });
     exe.linkLibrary(rl);
 
